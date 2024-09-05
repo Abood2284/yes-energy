@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1724936932034,
+      "tag": "20240829130852_rainy_morbius",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1724942732759,
+      "tag": "20240829144532_lazy_jigsaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1725015447913,
+      "tag": "20240830105727_organic_sebastian_shaw",
+      "breakpoints": true
+    }
+  ]
+}
