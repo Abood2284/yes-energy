@@ -1,10 +1,28 @@
 import ForecastDashboard from "@/components/shared/ForecastDashboard";
 import { db } from "@/db";
-import { d_load_fcst, j_load_fcst, load_act, mm_load_fcst, mw_load_fcst } from "@/db/schema";
+import {
+  d_load_fcst,
+  j_load_fcst,
+  load_act,
+  mm_load_fcst,
+  mw_load_fcst,
+} from "@/db/schema";
 import { ForecastData } from "@/lib/types";
 import { sql } from "drizzle-orm";
 
 export const runtime = "edge";
+
+function formatDateTime(date: string, time: string): string {
+  // Convert time from "0", "100", ..., "2300" to "00:00", "01:00", ..., "23:00"
+  const hours = time.padStart(4, "0").slice(0, 2);
+  const minutes = time.padStart(4, "0").slice(2, 4);
+
+  // Format: "YYYYMMDD HH:mm"
+  return `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(
+    6,
+    8
+  )} ${hours}:${minutes}`;
+}
 
 const parseDateFromText = (
   dateText: string,
@@ -87,7 +105,7 @@ async function getForecastData(
     }
 
     const processedData: ForecastData[] = actData.map((act) => {
-      const datetime = `${act.date}T${act.time.padStart(4, "0")}:00Z`;
+      const datetime = formatDateTime(act.date, act.time);
       const dFcst = dFcstData.find(
         (d) => d.date === act.date && d.time === act.time
       );
