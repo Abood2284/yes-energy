@@ -1,17 +1,18 @@
 import ForecastDashboard from "@/components/shared/ForecastDashboard";
 import { db } from "@/db";
-import { load_act, d_load_forecast } from "@/db/schema";
+import { d_load_fcst, j_load_fcst, load_act, mm_load_fcst, mw_load_fcst } from "@/db/schema";
 import { ForecastData } from "@/lib/types";
 import { sql } from "drizzle-orm";
 
 export const runtime = "edge";
+
 const parseDateFromText = (
   dateText: string,
   fallbackDate: string
 ): { year: string; month: string; day: string } | null => {
   if (dateText === "text") {
     console.log(
-      `Encountered 'text' as date, using fallback date: ${fallbackDate}`
+      `Encoun tered 'text' as date, using fallback date: ${fallbackDate}`
     );
     const match = fallbackDate.match(/(\d{4})(\d{2})(\d{2})/);
     if (match) {
@@ -43,31 +44,41 @@ async function getForecastData(
   try {
     console.log("Fetching data for date range:", startDate, "to", endDate);
 
-    console.log(
-      "Load act query:",
-      sql`date >= ${startDate} AND date <= ${endDate}`
-    );
-    console.log(
-      "Forecast query:",
-      sql`date >= ${startDate} AND date <= ${endDate}`
-    );
-
-    const [actData, fcstData] = await Promise.all([
-      db
-        .select()
-        .from(load_act)
-        .where(sql`date >= ${startDate} AND date <= ${endDate}`)
-        .orderBy(sql`date`, sql`time`),
-      db
-        .select()
-        .from(d_load_forecast)
-        .where(sql`date >= ${startDate} AND date <= ${endDate}`)
-        .orderBy(sql`date`, sql`time`, sql`revision DESC`),
-    ]);
+    const [actData, dFcstData, jFcstData, mmFcstData, mwFcstData] =
+      await Promise.all([
+        db
+          .select()
+          .from(load_act)
+          .where(sql`date >= ${startDate} AND date <= ${endDate}`)
+          .orderBy(sql`date`, sql`time`),
+        db
+          .select()
+          .from(d_load_fcst)
+          .where(sql`date >= ${startDate} AND date <= ${endDate}`)
+          .orderBy(sql`date`, sql`time`),
+        db
+          .select()
+          .from(j_load_fcst)
+          .where(sql`date >= ${startDate} AND date <= ${endDate}`)
+          .orderBy(sql`date`, sql`time`),
+        db
+          .select()
+          .from(mm_load_fcst)
+          .where(sql`date >= ${startDate} AND date <= ${endDate}`)
+          .orderBy(sql`date`, sql`time`),
+        db
+          .select()
+          .from(mw_load_fcst)
+          .where(sql`date >= ${startDate} AND date <= ${endDate}`)
+          .orderBy(sql`date`, sql`time`),
+      ]);
 
     console.log("Fetched data lengths:", {
       actData: actData.length,
-      fcstData: fcstData.length,
+      dFcstData: dFcstData.length,
+      jFcstData: jFcstData.length,
+      mmFcstData: mmFcstData.length,
+      mwFcstData: mwFcstData.length,
     });
 
     if (actData.length === 0) {
@@ -75,81 +86,32 @@ async function getForecastData(
       return [];
     }
 
-    console.log("Sample actData:", actData[0]);
-    console.log("Sample fcstData:", fcstData[0] || "No forecast data");
+    const processedData: ForecastData[] = actData.map((act) => {
+      const datetime = `${act.date}T${act.time.padStart(4, "0")}:00Z`;
+      const dFcst = dFcstData.find(
+        (d) => d.date === act.date && d.time === act.time
+      );
+      const jFcst = jFcstData.find(
+        (j) => j.date === act.date && j.time === act.time
+      );
+      const mmFcst = mmFcstData.find(
+        (mm) => mm.date === act.date && mm.time === act.time
+      );
+      const mwFcst = mwFcstData.find(
+        (mw) => mw.date === act.date && mw.time === act.time
+      );
 
-    // Process Baseline Forecast
-    const baselineForecast = fcstData.reduce((acc, curr) => {
-      const key = `${curr.date}_${curr.time}`;
-      if (
-        !acc[key] ||
-        (curr.revision &&
-          acc[key].revision &&
-          new Date(curr.revision) > new Date(acc[key].revision))
-      ) {
-        acc[key] = curr;
-      }
-      return acc;
-    }, {} as Record<string, (typeof fcstData)[0]>);
-
-    let filteredCount = 0;
-    const processedData: ForecastData[] = actData
-      .map((act, index) => {
-        console.log(
-          `Processing act data (${index + 1}/${actData.length}):`,
-          act
-        );
-
-        const parsedDate = parseDateFromText(act.date, startDate);
-        if (!parsedDate) {
-          console.error("Failed to parse date:", act.date);
-          filteredCount++;
-          return null;
-        }
-
-        const { year, month, day } = parsedDate;
-
-        // Parse time correctly
-        const timeString = act.time.padStart(4, "0");
-        const hour = timeString.slice(0, 2);
-        const minute = timeString.slice(2, 4);
-
-        console.log("Parsed date parts:", { year, month, day, hour, minute });
-
-        const datetimeString = `${year}-${month}-${day}T${hour}:${minute}:00Z`;
-        const datetime = isValidDate(datetimeString)
-          ? datetimeString
-          : "Invalid Date";
-
-        if (datetime === "Invalid Date") {
-          console.error("Invalid datetime constructed:", datetimeString);
-          filteredCount++;
-          return null;
-        }
-
-        console.log("Constructed datetime:", datetime);
-
-        const key = `${act.date}_${act.time}`;
-
-        return {
-          datetime,
-          load_act: parseFloat(act.load_act) || 0,
-          d_load_fcst: baselineForecast[key]
-            ? parseFloat(baselineForecast[key].load_fcst)
-            : null,
-          d_revision: baselineForecast[key]?.revision ?? "",
-          allRevisions: fcstData
-            .filter((d) => d.date === act.date && d.time === act.time)
-            .map((d) => ({
-              load_fcst: parseFloat(d.load_fcst),
-              revision: d.revision ?? "",
-            })),
-        };
-      })
-      .filter((item): item is ForecastData => item !== null);
+      return {
+        datetime,
+        load_act: parseFloat(act.load_act) || 0,
+        d_load_fcst: dFcst ? parseFloat(dFcst.load_fcst) : null,
+        j_load_fcst: jFcst ? parseFloat(jFcst.load_fcst) : null,
+        mm_load_fcst: mmFcst ? parseFloat(mmFcst.load_fcst) : null,
+        mw_load_fcst: mwFcst ? parseFloat(mwFcst.load_fcst) : null,
+      };
+    });
 
     console.log("Processed data length:", processedData.length);
-    console.log("Filtered out records:", filteredCount);
     console.log("First processed data item:", processedData[0]);
     console.log(
       "Last processed data item:",

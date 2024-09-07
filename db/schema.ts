@@ -5,7 +5,7 @@ import {
   text,
 } from "drizzle-orm/sqlite-core";
 
-export const d_load_forecast = sqliteTable("d_load_forecast", {
+export const d_load_fcst = sqliteTable("d_load_fcst", {
   id: integer("id").primaryKey().notNull(),
   date: text("date").notNull(), // Assuming date as text in 'YYYYMMDD' format
   time: text("time").notNull(), // Assuming time as text in 'HH:MM' format
@@ -13,9 +13,25 @@ export const d_load_forecast = sqliteTable("d_load_forecast", {
   revision: text("revision") // Assuming revision is a text field (date and time combined)
 });
 
-export const j_load_forecast = sqliteTable("j_load_forecast", {
+export const j_load_fcst = sqliteTable("j_load_fcst", {
   id: integer("id").primaryKey().notNull(),
-  date: text("text").notNull(), // Assuming date as text in 'YYYYMMDD' format
+  date: text("date").notNull(), // Assuming date as text in 'YYYYMMDD' format
+  time: text("time").notNull(), // Assuming time as text in 'HH:MM' format
+  load_fcst: text("load_fcst").notNull(),
+  revision: text("revision") // Assuming revision is a text field (date and time combined)
+});
+
+export const mm_load_fcst = sqliteTable("mm_load_fcst", {
+  id: integer("id").primaryKey().notNull(),
+  date: text("date").notNull(), // Assuming date as text in 'YYYYMMDD' format
+  time: text("time").notNull(), // Assuming time as text in 'HH:MM' format
+  load_fcst: text("load_fcst").notNull(),
+  revision: text("revision") // Assuming revision is a text field (date and time combined)
+});
+
+export const mw_load_fcst = sqliteTable("mw_load_fcst", {
+  id: integer("id").primaryKey().notNull(),
+  date: text("date").notNull(), // Assuming date as text in 'YYYYMMDD' format
   time: text("time").notNull(), // Assuming time as text in 'HH:MM' format
   load_fcst: text("load_fcst").notNull(),
   revision: text("revision") // Assuming revision is a text field (date and time combined)
@@ -23,12 +39,14 @@ export const j_load_forecast = sqliteTable("j_load_forecast", {
 
 export const load_act = sqliteTable("load_act", {
   id: integer("id").primaryKey().notNull(),
-  date: text("text").notNull(), // Assuming date as text in 'YYYYMMDD' format
+  date: text("date").notNull(), // Assuming date as text in 'YYYYMMDD' format
   time: text("time").notNull(), // Assuming time as text in 'HH:MM' format
   load_act: text("load_act").notNull(), // Changed from load_fcst to load_act
 });
 
 // Type definitions for better type inference
-export type DLoadForecast = typeof d_load_forecast.$inferSelect;
-export type JLoadForecast = typeof j_load_forecast.$inferSelect;
+export type DLoadFcst = typeof d_load_fcst.$inferSelect;
+export type JLoadFcst = typeof j_load_fcst.$inferSelect;
+export type MMLoadFcst = typeof mm_load_fcst.$inferSelect;
+export type MWLoadFcst = typeof mw_load_fcst.$inferSelect;
 export type LoadAct = typeof load_act.$inferSelect;
