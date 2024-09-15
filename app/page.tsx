@@ -7,57 +7,28 @@ import {
   mm_load_fcst,
   mw_load_fcst,
 } from "@/db/schema";
+import {
+  calculateStatistics,
+  processForecasts,
+} from "@/lib/server-calculations";
 import { ForecastData } from "@/lib/types";
 import { sql } from "drizzle-orm";
 
 export const runtime = "edge";
 
 function formatDateTime(date: string, time: string): string {
-  // Convert time from "0", "100", ..., "2300" to "00:00", "01:00", ..., "23:00"
   const hours = time.padStart(4, "0").slice(0, 2);
   const minutes = time.padStart(4, "0").slice(2, 4);
-
-  // Format: "YYYYMMDD HH:mm"
   return `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(
     6,
     8
   )} ${hours}:${minutes}`;
 }
 
-const parseDateFromText = (
-  dateText: string,
-  fallbackDate: string
-): { year: string; month: string; day: string } | null => {
-  if (dateText === "text") {
-    console.log(
-      `Encoun tered 'text' as date, using fallback date: ${fallbackDate}`
-    );
-    const match = fallbackDate.match(/(\d{4})(\d{2})(\d{2})/);
-    if (match) {
-      const [, year, month, day] = match;
-      return { year, month, day };
-    }
-  } else {
-    const match = dateText.match(/(\d{4})(\d{2})(\d{2})/);
-    if (match) {
-      const [, year, month, day] = match;
-      return { year, month, day };
-    }
-  }
-  console.error(
-    `Failed to parse date: ${dateText}, fallback date: ${fallbackDate}`
-  );
-  return null;
-};
-
-const isValidDate = (dateString: string) => {
-  const d = new Date(dateString);
-  return !isNaN(d.getTime());
-};
-
 async function getForecastData(
   startDate: string,
-  endDate: string
+  endDate: string,
+  limit: number = 1000 // Add a limit parameter
 ): Promise<ForecastData[]> {
   try {
     console.log("Fetching data for date range:", startDate, "to", endDate);
@@ -68,27 +39,32 @@ async function getForecastData(
           .select()
           .from(load_act)
           .where(sql`date >= ${startDate} AND date <= ${endDate}`)
-          .orderBy(sql`date`, sql`time`),
+          .orderBy(sql`date`, sql`time`)
+          .limit(limit), // Add limit
         db
           .select()
           .from(d_load_fcst)
           .where(sql`date >= ${startDate} AND date <= ${endDate}`)
-          .orderBy(sql`date`, sql`time`),
+          .orderBy(sql`date`, sql`time`)
+          .limit(limit), // Add limit
         db
           .select()
           .from(j_load_fcst)
           .where(sql`date >= ${startDate} AND date <= ${endDate}`)
-          .orderBy(sql`date`, sql`time`),
+          .orderBy(sql`date`, sql`time`)
+          .limit(limit), // Add limit
         db
           .select()
           .from(mm_load_fcst)
           .where(sql`date >= ${startDate} AND date <= ${endDate}`)
-          .orderBy(sql`date`, sql`time`),
+          .orderBy(sql`date`, sql`time`)
+          .limit(limit), // Add limit
         db
           .select()
           .from(mw_load_fcst)
           .where(sql`date >= ${startDate} AND date <= ${endDate}`)
-          .orderBy(sql`date`, sql`time`),
+          .orderBy(sql`date`, sql`time`)
+          .limit(limit), // Add limit
       ]);
 
     console.log("Fetched data lengths:", {
@@ -98,11 +74,6 @@ async function getForecastData(
       mmFcstData: mmFcstData.length,
       mwFcstData: mwFcstData.length,
     });
-
-    if (actData.length === 0) {
-      console.log("No data found for the specified date range");
-      return [];
-    }
 
     const processedData: ForecastData[] = actData.map((act) => {
       const datetime = formatDateTime(act.date, act.time);
@@ -130,12 +101,6 @@ async function getForecastData(
     });
 
     console.log("Processed data length:", processedData.length);
-    console.log("First processed data item:", processedData[0]);
-    console.log(
-      "Last processed data item:",
-      processedData[processedData.length - 1]
-    );
-
     return processedData;
   } catch (error) {
     console.error("Error fetching forecast data:", error);
@@ -143,9 +108,17 @@ async function getForecastData(
   }
 }
 
-export default async function Page() {
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: { page?: string; limit?: string };
+}) {
+  const page = parseInt(searchParams.page ?? "1", 10);
+  const limit = parseInt(searchParams.limit ?? "1000", 10);
+  const offset = (page - 1) * limit;
+
   const today = new Date();
-  const startOfYear = new Date(today.getFullYear(), 0, 1); // January 1st of current year
+  const startOfYear = new Date(today.getFullYear(), 0, 1);
 
   const formatDate = (date: Date) => {
     const year = date.getFullYear();
@@ -162,21 +135,29 @@ export default async function Page() {
   try {
     const forecastData: ForecastData[] = await getForecastData(
       startDate,
-      endDate
+      endDate,
+      limit
     );
 
-    console.log("Forecast data length:", forecastData.length);
+    const processedForecasts = await processForecasts(forecastData);
+    const statistics = await calculateStatistics(processedForecasts);
 
-    if (forecastData.length === 0) {
-      return (
-        <div>
-          No forecast data available for the selected date range. Please try a
-          different range.
-        </div>
-      );
-    }
-
-    return <ForecastDashboard initialForecasts={forecastData} />;
+    return (
+      <>
+        {forecastData.length === 0 && (
+          <div className="p-4 mb-4 bg-yellow-100 border border-yellow-400 text-yellow-700 rounded">
+            <p>
+              No forecast data available for the selected date range. You can
+              still interact with the dashboard features.
+            </p>
+          </div>
+        )}
+        <ForecastDashboard
+          initialForecasts={processedForecasts}
+          initialStatistics={statistics}
+        />
+      </>
+    );
   } catch (error) {
     console.error("Error in Page component:", error);
     return (

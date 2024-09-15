@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 import { format } from "date-fns";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { DateRange } from "react-day-picker";
@@ -18,11 +18,11 @@ interface DatePickerWithRangeProps {
   setDateRange: React.Dispatch<React.SetStateAction<DateRange | undefined>>;
 }
 
-export function DatePickerWithRange({
+const DatePickerWithRange = memo(({
   className,
   dateRange,
   setDateRange,
-}: DatePickerWithRangeProps) {
+}: DatePickerWithRangeProps) => {
   return (
     <div className={cn("grid gap-2", className)}>
       <Popover>
@@ -63,4 +63,6 @@ export function DatePickerWithRange({
       </Popover>
     </div>
   );
-}
+});
+
+export { DatePickerWithRange };
