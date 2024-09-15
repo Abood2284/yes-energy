@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { FixedSizeList as List, ListChildComponentProps } from "react-window";
 import {
   LineChart,
@@ -27,7 +27,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ForecastData } from "@/lib/types";
-import { Loader2 } from "lucide-react"; // Import a loader icon
+import { Loader2 } from "lucide-react";
 
 interface ForecastDashboardProps {
   initialForecasts: ForecastData[];
@@ -102,7 +102,7 @@ export default function ForecastDashboard({
     );
   };
 
-  const updateChartData = async () => {
+  const updateChartData = useCallback(async () => {
     setIsLoading(true);
     try {
       const response = await fetch("/api/process-forecasts", {
@@ -120,14 +120,17 @@ export default function ForecastDashboard({
       console.log("Statistics:", data.statistics);
       setChartData(data.processedForecasts);
       setStatistics(data.statistics);
-      setCurrentPage(1); // Reset to first page when data updates
+      setCurrentPage(1);
     } catch (error) {
       console.error("Error updating chart data:", error);
-      // Handle the error appropriately (e.g., show an error message to the user)
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [initialForecasts, dateRange]);
+
+  useEffect(() => {
+    updateChartData();
+  }, [dateRange, selectedForecasts, updateChartData]);
 
   const SpreadsheetCell = ({
     children,
