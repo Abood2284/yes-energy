@@ -6,6 +6,16 @@ import {
   load_act,
   mm_load_fcst,
   mw_load_fcst,
+  d_load_fcst_full,
+  j_load_fcst_full,
+  mm_load_fcst_full,
+  mw_load_fcst_full,
+  load_act_full,
+  LoadAct,
+  DLoadFcst,
+  JLoadFcst,
+  MMLoadFcst,
+  MWLoadFcst,
 } from "@/db/schema";
 import {
   calculateStatistics,
@@ -28,44 +38,34 @@ function formatDateTime(date: string, time: string): string {
 async function getForecastData(
   startDate: string,
   endDate: string,
-  limit: number = 1000 // Add a limit parameter
+  limit: number = 1000,
+  forecastType: "baseline" | "historical" = "baseline"
 ): Promise<ForecastData[]> {
   try {
     console.log("Fetching data for date range:", startDate, "to", endDate);
 
+    const tables =
+      forecastType === "baseline"
+        ? [load_act, d_load_fcst, j_load_fcst, mm_load_fcst, mw_load_fcst]
+        : [
+            load_act_full,
+            d_load_fcst_full,
+            j_load_fcst_full,
+            mm_load_fcst_full,
+            mw_load_fcst_full,
+          ];
+
     const [actData, dFcstData, jFcstData, mmFcstData, mwFcstData] =
-      await Promise.all([
-        db
-          .select()
-          .from(load_act)
-          .where(sql`date >= ${startDate} AND date <= ${endDate}`)
-          .orderBy(sql`date`, sql`time`)
-          .limit(limit), // Add limit
-        db
-          .select()
-          .from(d_load_fcst)
-          .where(sql`date >= ${startDate} AND date <= ${endDate}`)
-          .orderBy(sql`date`, sql`time`)
-          .limit(limit), // Add limit
-        db
-          .select()
-          .from(j_load_fcst)
-          .where(sql`date >= ${startDate} AND date <= ${endDate}`)
-          .orderBy(sql`date`, sql`time`)
-          .limit(limit), // Add limit
-        db
-          .select()
-          .from(mm_load_fcst)
-          .where(sql`date >= ${startDate} AND date <= ${endDate}`)
-          .orderBy(sql`date`, sql`time`)
-          .limit(limit), // Add limit
-        db
-          .select()
-          .from(mw_load_fcst)
-          .where(sql`date >= ${startDate} AND date <= ${endDate}`)
-          .orderBy(sql`date`, sql`time`)
-          .limit(limit), // Add limit
-      ]);
+      await Promise.all(
+        tables.map((table) =>
+          db
+            .select()
+            .from(table)
+            .where(sql`date >= ${startDate} AND date <= ${endDate}`)
+            .orderBy(sql`date`, sql`time`)
+            .limit(limit)
+        )
+      );
 
     console.log("Fetched data lengths:", {
       actData: actData.length,
@@ -75,18 +75,18 @@ async function getForecastData(
       mwFcstData: mwFcstData.length,
     });
 
-    const processedData: ForecastData[] = actData.map((act) => {
+    const processedData: ForecastData[] = (actData as LoadAct[]).map((act) => {
       const datetime = formatDateTime(act.date, act.time);
-      const dFcst = dFcstData.find(
+      const dFcst = (dFcstData as DLoadFcst[]).find(
         (d) => d.date === act.date && d.time === act.time
       );
-      const jFcst = jFcstData.find(
+      const jFcst = (jFcstData as JLoadFcst[]).find(
         (j) => j.date === act.date && j.time === act.time
       );
-      const mmFcst = mmFcstData.find(
+      const mmFcst = (mmFcstData as MMLoadFcst[]).find(
         (mm) => mm.date === act.date && mm.time === act.time
       );
-      const mwFcst = mwFcstData.find(
+      const mwFcst = (mwFcstData as MWLoadFcst[]).find(
         (mw) => mw.date === act.date && mw.time === act.time
       );
 
@@ -111,11 +111,12 @@ async function getForecastData(
 export default async function Page({
   searchParams,
 }: {
-  searchParams: { page?: string; limit?: string };
+  searchParams: { page?: string; limit?: string; forecastType?: string };
 }) {
   const page = parseInt(searchParams.page ?? "1", 10);
   const limit = parseInt(searchParams.limit ?? "1000", 10);
-  const offset = (page - 1) * limit;
+  const forecastType =
+    (searchParams.forecastType as "baseline" | "historical") ?? "baseline";
 
   const today = new Date();
   const startOfYear = new Date(today.getFullYear(), 0, 1);
@@ -136,7 +137,8 @@ export default async function Page({
     const forecastData: ForecastData[] = await getForecastData(
       startDate,
       endDate,
-      limit
+      limit,
+      forecastType
     );
 
     const processedForecasts = await processForecasts(forecastData);

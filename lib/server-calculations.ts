@@ -1,10 +1,62 @@
 import { ForecastData } from "@/lib/types";
 
+
+export function filterHistoricalData(
+  forecasts: ForecastData[],
+  daysAhead: number,
+  time: string
+): ForecastData[] {
+  const filteredForecasts: ForecastData[] = [];
+  const timeComponents = time.split(':');
+  const filterHour = parseInt(timeComponents[0]);
+  const filterMinute = parseInt(timeComponents[1]);
+
+  for (const forecast of forecasts) {
+    const forecastDate = new Date(forecast.datetime);
+    const forecastHour = forecastDate.getHours();
+    const forecastMinute = forecastDate.getMinutes();
+
+    // Check if the forecast time is just before the specified time
+    if (
+      forecastHour < filterHour ||
+      (forecastHour === filterHour && forecastMinute < filterMinute)
+    ) {
+      // Calculate the date for 'daysAhead' days before the forecast date
+      const historicalDate = new Date(forecastDate);
+      historicalDate.setDate(historicalDate.getDate() - daysAhead);
+
+      // Find the latest forecast made on or before the historical date
+      const latestHistoricalForecast = forecasts.find(f => {
+        const fDate = new Date(f.datetime);
+        return fDate <= historicalDate && fDate.getDate() === historicalDate.getDate();
+      });
+
+      if (latestHistoricalForecast) {
+        filteredForecasts.push({
+          ...forecast,
+          historical_d_load_fcst: latestHistoricalForecast.d_load_fcst,
+          historical_j_load_fcst: latestHistoricalForecast.j_load_fcst,
+          historical_mm_load_fcst: latestHistoricalForecast.mm_load_fcst,
+          historical_mw_load_fcst: latestHistoricalForecast.mw_load_fcst,
+        });
+      } else {
+        filteredForecasts.push(forecast);
+      }
+    } else {
+      filteredForecasts.push(forecast);
+    }
+  }
+
+  return filteredForecasts;
+}
+
+
+
 export async function calculateStatistics(chartData: ForecastData[]) {
   const calculateRMSE = (actual: number[], predicted: number[]): number => {
     if (actual.length !== predicted.length) return NaN;
     const squaredErrors = actual.map((value, index) =>
-      Math.pow(value - predicted[index], 2)
+      Math.pow(value - (predicted[index] || 0), 2)
     );
     const meanSquaredError =
       squaredErrors.reduce((sum, value) => sum + value, 0) / actual.length;
@@ -18,7 +70,16 @@ export async function calculateStatistics(chartData: ForecastData[]) {
     };
   } = {};
 
-  const forecastKeys = ["d_load_fcst", "j_load_fcst", "mm_load_fcst", "mw_load_fcst"];
+  const forecastKeys = [
+    "d_load_fcst",
+    "j_load_fcst",
+    "mm_load_fcst",
+    "mw_load_fcst",
+    "historical_d_load_fcst",
+    "historical_j_load_fcst",
+    "historical_mm_load_fcst",
+    "historical_mw_load_fcst"
+  ];
 
   forecastKeys.forEach((forecast) => {
     const actualValues = chartData.map((d) => d.load_act as number);
@@ -52,15 +113,28 @@ export async function calculateStatistics(chartData: ForecastData[]) {
   return stats;
 }
 
-export async function processForecasts(forecastData: ForecastData[], dateRange?: { from: Date; to: Date }) {
-  let filteredData = forecastData;
+export async function processForecasts(
+  forecasts: ForecastData[],
+  dateRange?: { from: Date; to: Date },
+  showHistoricalData?: boolean,
+  historicalDaysAhead?: number,
+  historicalTime?: string
+): Promise<ForecastData[]> {
+  let processedForecasts = forecasts;
 
-  if (dateRange && dateRange.from && dateRange.to) {
-    filteredData = filteredData.filter((d) => {
-      const date = new Date(d.datetime);
-      return date >= dateRange.from! && date <= dateRange.to!;
+  // Implement date range filtering if dateRange is provided
+  if (dateRange) {
+    const { from, to } = dateRange;
+    processedForecasts = processedForecasts.filter(forecast => {
+      const forecastDate = new Date(forecast.datetime);
+      return forecastDate >= from && forecastDate <= to;
     });
   }
 
-  return filteredData;
+  // Process historical data if requested
+  if (showHistoricalData && historicalDaysAhead !== undefined && historicalTime !== undefined) {
+    processedForecasts = filterHistoricalData(processedForecasts, historicalDaysAhead, historicalTime);
+  }
+
+  return processedForecasts;
 }
