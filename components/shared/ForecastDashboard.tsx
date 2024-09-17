@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-import { FixedSizeList as List, ListChildComponentProps } from "react-window";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { FixedSizeList as List } from "react-window";
 import {
   LineChart,
   Line,
@@ -27,7 +27,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ForecastData } from "@/lib/types";
-import { Loader2 } from "lucide-react"; // Import a loader icon
+import { Loader2 } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface ForecastDashboardProps {
   initialForecasts: ForecastData[];
@@ -53,20 +54,7 @@ export default function ForecastDashboard({
   initialForecasts = [],
   initialStatistics = {},
 }: ForecastDashboardProps) {
-  const baselineColors = {
-    load_act: "#FF0000",
-    d_load_fcst: "#00FF00",
-    j_load_fcst: "#0000FF",
-    mm_load_fcst: "#FFFF00",
-    mw_load_fcst: "#FF00FF",
-  };
-  const historicalColors = {
-    d_load_fcst: "#00AA00",
-    j_load_fcst: "#0000AA",
-    mm_load_fcst: "#AAAA00",
-    mw_load_fcst: "#AA00AA",
-  };
-
+  const colors = ["#8884d8", "#82ca9d", "#ffc658", "#ff7300", "#0088FE"];
   const [selectedForecasts, setSelectedForecasts] = useState<string[]>([
     "load_act",
     "d_load_fcst",
@@ -84,17 +72,8 @@ export default function ForecastDashboard({
     return undefined;
   });
   const [chartData, setChartData] = useState(initialForecasts);
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
   const [statistics, setStatistics] = useState(initialStatistics);
   const [isLoading, setIsLoading] = useState(false);
-
-  const [forecastType, setForecastType] = useState<"baseline" | "historical">(
-    "baseline"
-  );
-  const [historicalDaysAhead, setHistoricalDaysAhead] = useState<string>("1");
-  const [historicalTime, setHistoricalTime] = useState<string>("13:00");
-  const [showHistoricalData, setShowHistoricalData] = useState<boolean>(false);
 
   const filteredData = useMemo(() => {
     return chartData.filter((data) => {
@@ -106,15 +85,6 @@ export default function ForecastDashboard({
     });
   }, [chartData, dateRange]);
 
-  const paginatedData = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredData.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredData, currentPage, itemsPerPage]);
-
-  useEffect(() => {
-    updateChartData();
-  }, [dateRange, selectedForecasts]);
-
   const handleForecastToggle = (forecast: string) => {
     setSelectedForecasts((prev) =>
       prev.includes(forecast)
@@ -123,7 +93,7 @@ export default function ForecastDashboard({
     );
   };
 
-  const updateChartData = async () => {
+  const updateChartData = useCallback(async () => {
     setIsLoading(true);
     try {
       const response = await fetch("/api/process-forecasts", {
@@ -131,15 +101,7 @@ export default function ForecastDashboard({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          forecasts: initialForecasts,
-          dateRange,
-          forecastType,
-          historicalDaysAhead: showHistoricalData
-            ? historicalDaysAhead
-            : undefined,
-          historicalTime: showHistoricalData ? historicalTime : undefined,
-        }),
+        body: JSON.stringify({ forecasts: initialForecasts, dateRange }),
       });
       if (!response.ok) {
         throw new Error("Failed to fetch processed data");
@@ -147,69 +109,16 @@ export default function ForecastDashboard({
       const data: ProcessedData = await response.json();
       setChartData(data.processedForecasts);
       setStatistics(data.statistics);
-      setCurrentPage(1); // Reset to first page when data updates
     } catch (error) {
       console.error("Error updating chart data:", error);
-      // Handle the error appropriately (e.g., show an error message to the user)
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [initialForecasts, dateRange]);
 
-  const SpreadsheetCell = ({
-    children,
-    isHeader = false,
-  }: {
-    children: React.ReactNode;
-    isHeader?: boolean;
-  }) => (
-    <div
-      style={{
-        padding: "8px",
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap",
-        borderRight: "1px solid #e2e8f0",
-        fontWeight: isHeader ? "bold" : "normal",
-      }}
-    >
-      {children}
-    </div>
-  );
-
-  const VirtualizedRow = ({
-    index,
-    style,
-  }: {
-    index: number;
-    style: React.CSSProperties;
-  }) => {
-    const data = paginatedData[index];
-    const totalColumns = selectedForecasts.length + 2; // +2 for date and time columns
-    return (
-      <div
-        style={{
-          ...style,
-          display: "grid",
-          gridTemplateColumns: `repeat(${totalColumns}, 1fr)`,
-          alignItems: "center",
-          borderBottom: "1px solid #e2e8f0",
-        }}
-      >
-        <SpreadsheetCell>
-          {new Date(data.datetime).toLocaleDateString()}
-        </SpreadsheetCell>
-        <SpreadsheetCell>
-          {new Date(data.datetime).toLocaleTimeString()}
-        </SpreadsheetCell>
-        {selectedForecasts.map((forecast) => (
-          <SpreadsheetCell key={forecast}>
-            {data[forecast as keyof ForecastData]}
-          </SpreadsheetCell>
-        ))}
-      </div>
-    );
-  };
+  useEffect(() => {
+    updateChartData();
+  }, [dateRange, updateChartData]);
 
   if (isLoading) {
     return (
@@ -228,108 +137,138 @@ export default function ForecastDashboard({
             <CardTitle>Load Forecast Dashboard</CardTitle>
           </CardHeader>
           <CardContent>
-            {filteredData.length === 0 ? (
-              <div className="text-center py-10">
-                <p className="text-lg font-semibold mb-4">
-                  No forecast data available for the selected date range
-                </p>
-                <p>
-                  Please adjust the date range or ensure data is available for
-                  the selected period.
-                </p>
-              </div>
-            ) : (
-              <>
-                <div className="flex space-x-4 mb-4">
-                  <div>
-                    <h3 className="text-lg font-semibold mb-2">
-                      Select Forecasts
-                    </h3>
-                    {[
-                      "load_act",
-                      "d_load_fcst",
-                      "j_load_fcst",
-                      "mm_load_fcst",
-                      "mw_load_fcst",
-                    ].map((forecast) => (
-                      <div
-                        key={forecast}
-                        className="flex items-center space-x-2"
-                      >
-                        <Checkbox
-                          id={forecast}
-                          checked={selectedForecasts.includes(forecast)}
-                          onCheckedChange={() => handleForecastToggle(forecast)}
-                        />
-                        <label htmlFor={forecast}>
-                          {forecast.replace("_", " ").toUpperCase()}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold mb-2">Date Range</h3>
-                    <DatePickerWithRange
-                      dateRange={dateRange}
-                      setDateRange={setDateRange}
-                    />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold mb-2">
-                      Historical Data
-                    </h3>
+            <div className="flex space-x-4 mb-4">
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Select Forecasts</h3>
+                {[
+                  "load_act",
+                  "d_load_fcst",
+                  "j_load_fcst",
+                  "mm_load_fcst",
+                  "mw_load_fcst",
+                ].map((forecast) => (
+                  <div key={forecast} className="flex items-center space-x-2">
                     <Checkbox
-                      id="showHistoricalData"
-                      checked={showHistoricalData}
-                      onCheckedChange={(checked) =>
-                        setShowHistoricalData(checked as boolean)
+                      id={forecast}
+                      checked={selectedForecasts.includes(forecast)}
+                      onCheckedChange={() => handleForecastToggle(forecast)}
+                    />
+                    <label htmlFor={forecast}>
+                      {forecast.replace("_", " ").toUpperCase()}
+                    </label>
+                  </div>
+                ))}
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Date Range</h3>
+                <DatePickerWithRange
+                  dateRange={dateRange}
+                  setDateRange={setDateRange}
+                />
+              </div>
+            </div>
+            <Tabs defaultValue="graph">
+              <TabsList>
+                <TabsTrigger value="graph">Graph</TabsTrigger>
+                <TabsTrigger value="spreadsheet">Spreadsheet</TabsTrigger>
+                <TabsTrigger value="statistics">Statistics</TabsTrigger>
+              </TabsList>
+              <TabsContent value="graph">
+                <ResponsiveContainer width="100%" height={400}>
+                  <LineChart data={filteredData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="datetime"
+                      tickFormatter={(tick) =>
+                        new Date(tick).toLocaleDateString()
                       }
                     />
-                    <Label htmlFor="showHistoricalData">
-                      Show Historical Data
-                    </Label>
-                    {showHistoricalData && (
-                      <>
-                        <Select
-                          value={historicalDaysAhead}
-                          onValueChange={setHistoricalDaysAhead}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Days Ahead" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {[0, 1, 2, 3, 4, 5, 6, 7].map((days) => (
-                              <SelectItem key={days} value={days.toString()}>
-                                {days} Day{days !== 1 ? "s" : ""} Ahead
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          type="time"
-                          value={historicalTime}
-                          onChange={(e) => setHistoricalTime(e.target.value)}
-                        />
-                      </>
-                    )}
-                  </div>
-                </div>
-                <Tabs defaultValue="graph">
-                  <TabsList>
-                    <TabsTrigger value="graph">Graph</TabsTrigger>
-                    <TabsTrigger value="statistics">Statistics</TabsTrigger>
-                    <TabsTrigger value="spreadsheet">Spreadsheet</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="graph">{renderLineChart()}</TabsContent>
-                  <TabsContent value="statistics">
-                    {/* ... (statistics content remains the same) */}
-                  </TabsContent>
-                  <TabsContent value="spreadsheet">
-                    {/* ... (spreadsheet content remains the same) */}
-                  </TabsContent>
-                </Tabs>
-              </>
-            )}
+                    <YAxis />
+                    <Tooltip
+                      labelFormatter={(label) =>
+                        new Date(label).toLocaleString()
+                      }
+                    />
+                    <Legend />
+                    {selectedForecasts.map((forecast, index) => (
+                      <Line
+                        key={forecast}
+                        type="monotone"
+                        dataKey={forecast}
+                        stroke={colors[index % colors.length]}
+                        activeDot={{ r: 8 }}
+                        name={forecast.replace("_", " ").toUpperCase()}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </TabsContent>
+              <TabsContent value="spreadsheet">
+                <ScrollArea className="h-[400px] w-full border rounded-md">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="sticky top-0 bg-white z-10">
+                          DateTime
+                        </TableHead>
+                        {selectedForecasts.map((forecast) => (
+                          <TableHead
+                            key={forecast}
+                            className="sticky top-0 bg-white z-10"
+                          >
+                            {forecast.replace("_", " ").toUpperCase()}
+                          </TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredData.map((data, index) => (
+                        <TableRow key={index} className="hover:bg-gray-100">
+                          <TableCell className="font-medium">
+                            {new Date(data.datetime).toLocaleString()}
+                          </TableCell>
+                          {selectedForecasts.map((forecast) => (
+                            <TableCell key={forecast}>
+                              {(() => {
+                                const value =
+                                  data[forecast as keyof ForecastData];
+                                if (typeof value === "number") {
+                                  return value.toFixed(2);
+                                } else if (typeof value === "string") {
+                                  return value;
+                                } else {
+                                  return "N/A";
+                                }
+                              })()}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+              </TabsContent>
+              <TabsContent value="statistics">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Forecast</TableHead>
+                      <TableHead>Overall RMSE</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {Object.entries(statistics).map(([forecast, stats]) => (
+                      <TableRow key={forecast}>
+                        <TableCell>
+                          {forecast.replace("_", " ").toUpperCase()}
+                        </TableCell>
+                        <TableCell>{stats.overallRMSE.toFixed(2)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
       </div>

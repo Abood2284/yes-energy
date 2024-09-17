@@ -65,4 +65,6 @@ const DatePickerWithRange = memo(({
   );
 });
 
+DatePickerWithRange.displayName = 'DatePickerWithRange';
+
 export { DatePickerWithRange };
