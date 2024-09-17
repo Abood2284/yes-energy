@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { FixedSizeList as List } from "react-window";
+import React, { useState, useEffect, useMemo } from "react";
+import { FixedSizeList as List, ListChildComponentProps } from "react-window";
 import {
   LineChart,
   Line,
@@ -27,17 +27,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ForecastData } from "@/lib/types";
-import { Loader2 } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
+import { Loader2 } from "lucide-react"; // Import a loader icon
 
 interface ForecastDashboardProps {
   initialForecasts: ForecastData[];
@@ -133,7 +123,7 @@ export default function ForecastDashboard({
     );
   };
 
-  const updateChartData = useCallback(async () => {
+  const updateChartData = async () => {
     setIsLoading(true);
     try {
       const response = await fetch("/api/process-forecasts", {
@@ -157,72 +147,14 @@ export default function ForecastDashboard({
       const data: ProcessedData = await response.json();
       setChartData(data.processedForecasts);
       setStatistics(data.statistics);
-      setCurrentPage(1);
+      setCurrentPage(1); // Reset to first page when data updates
     } catch (error) {
       console.error("Error updating chart data:", error);
+      // Handle the error appropriately (e.g., show an error message to the user)
     } finally {
       setIsLoading(false);
     }
-  }, [
-    initialForecasts,
-    dateRange,
-    forecastType,
-    showHistoricalData,
-    historicalDaysAhead,
-    historicalTime,
-  ]);
-
-  useEffect(() => {
-    updateChartData();
-  }, [
-    dateRange,
-    selectedForecasts,
-    forecastType,
-    showHistoricalData,
-    historicalDaysAhead,
-    historicalTime,
-    updateChartData,
-  ]);
-
-  const renderLineChart = () => (
-    <ResponsiveContainer width="100%" height={400}>
-      <LineChart data={filteredData}>
-        <CartesianGrid strokeDasharray="3 3" />
-        <XAxis
-          dataKey="datetime"
-          tickFormatter={(tick) => new Date(tick).toLocaleDateString()}
-        />
-        <YAxis />
-        <Tooltip labelFormatter={(label) => new Date(label).toLocaleString()} />
-        <Legend />
-        {selectedForecasts.map((forecast) => (
-          <Line
-            key={forecast}
-            type="monotone"
-            dataKey={forecast}
-            stroke={baselineColors[forecast as keyof typeof baselineColors]}
-            name={`Baseline ${forecast.replace("_", " ").toUpperCase()}`}
-            dot={false}
-          />
-        ))}
-        {showHistoricalData &&
-          selectedForecasts
-            .filter((f) => f !== "load_act")
-            .map((forecast) => (
-              <Line
-                key={`historical_${forecast}`}
-                type="monotone"
-                dataKey={`historical_${forecast}`}
-                stroke={
-                  historicalColors[forecast as keyof typeof historicalColors]
-                }
-                name={`Historical ${forecast.replace("_", " ").toUpperCase()}`}
-                dot={false}
-              />
-            ))}
-      </LineChart>
-    </ResponsiveContainer>
-  );
+  };
 
   const SpreadsheetCell = ({
     children,
