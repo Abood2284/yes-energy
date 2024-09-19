@@ -28,8 +28,14 @@ import {
 } from "@/components/ui/table";
 import { ForecastData } from "@/lib/types";
 import { Loader2 } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 import { Input } from "../ui/input";
 
 interface ForecastDashboardProps {
@@ -90,6 +96,12 @@ export default function ForecastDashboard({
       );
     });
   }, [chartData, dateRange]);
+
+  const chartWidth = useMemo(() => {
+    // Calculate a width based on the number of data points
+    // You can adjust the multiplier (20) to change the density of the chart
+    return Math.max(filteredData.length * 20, 1000); // Minimum width of 1000px
+  }, [filteredData]);
 
   const handleForecastToggle = (forecast: string) => {
     setSelectedForecasts((prev) =>
@@ -240,34 +252,40 @@ export default function ForecastDashboard({
                 <TabsTrigger value="statistics">Statistics</TabsTrigger>
               </TabsList>
               <TabsContent value="graph">
-                <ResponsiveContainer width="100%" height={400}>
-                  <LineChart data={filteredData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis
-                      dataKey="datetime"
-                      tickFormatter={(tick) =>
-                        new Date(tick).toLocaleDateString()
-                      }
-                    />
-                    <YAxis />
-                    <Tooltip
-                      labelFormatter={(label) =>
-                        new Date(label).toLocaleString()
-                      }
-                    />
-                    <Legend />
-                    {selectedForecasts.map((forecast, index) => (
-                      <Line
-                        key={forecast}
-                        type="monotone"
-                        dataKey={forecast}
-                        stroke={colors[index % colors.length]}
-                        activeDot={{ r: 8 }}
-                        name={forecast.replace("_", " ").toUpperCase()}
-                      />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
+                <ScrollArea className="w-full">
+                  <div style={{ width: `${chartWidth}px`, height: "400px" }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={filteredData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis
+                          dataKey="datetime"
+                          tickFormatter={(tick) =>
+                            new Date(tick).toLocaleDateString()
+                          }
+                          interval="preserveStartEnd"
+                        />
+                        <YAxis />
+                        <Tooltip
+                          labelFormatter={(label) =>
+                            new Date(label).toLocaleString()
+                          }
+                        />
+                        <Legend />
+                        {selectedForecasts.map((forecast, index) => (
+                          <Line
+                            key={forecast}
+                            type="monotone"
+                            dataKey={forecast}
+                            stroke={colors[index % colors.length]}
+                            activeDot={{ r: 8 }}
+                            name={forecast.replace("_", " ").toUpperCase()}
+                          />
+                        ))}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <ScrollBar orientation="horizontal" />
+                </ScrollArea>
               </TabsContent>
               <TabsContent value="spreadsheet">
                 <ScrollArea className="h-[400px] w-full border rounded-md">
