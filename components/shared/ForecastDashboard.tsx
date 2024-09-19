@@ -29,6 +29,8 @@ import {
 import { ForecastData } from "@/lib/types";
 import { Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { Input } from "../ui/input";
 
 interface ForecastDashboardProps {
   initialForecasts: ForecastData[];
@@ -75,6 +77,10 @@ export default function ForecastDashboard({
   const [statistics, setStatistics] = useState(initialStatistics);
   const [isLoading, setIsLoading] = useState(false);
 
+  const [showHistoricalData, setShowHistoricalData] = useState(false);
+  const [historicalDaysAhead, setHistoricalDaysAhead] = useState("1");
+  const [historicalTime, setHistoricalTime] = useState("13:00");
+
   const filteredData = useMemo(() => {
     return chartData.filter((data) => {
       const date = new Date(data.datetime);
@@ -101,7 +107,14 @@ export default function ForecastDashboard({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ forecasts: initialForecasts, dateRange }),
+        body: JSON.stringify({
+          forecasts: initialForecasts,
+          dateRange,
+          showHistoricalData,
+          historicalDaysAhead,
+          historicalTime,
+          selectedForecasts,
+        }),
       });
       if (!response.ok) {
         throw new Error("Failed to fetch processed data");
@@ -114,11 +127,24 @@ export default function ForecastDashboard({
     } finally {
       setIsLoading(false);
     }
-  }, [initialForecasts, dateRange]);
+  }, [
+    initialForecasts,
+    dateRange,
+    showHistoricalData,
+    historicalDaysAhead,
+    historicalTime,
+    selectedForecasts,
+  ]);
 
   useEffect(() => {
     updateChartData();
-  }, [dateRange, updateChartData]);
+  }, [
+    dateRange,
+    showHistoricalData,
+    historicalDaysAhead,
+    historicalTime,
+    updateChartData,
+  ]);
 
   if (isLoading) {
     return (
@@ -165,6 +191,46 @@ export default function ForecastDashboard({
                   dateRange={dateRange}
                   setDateRange={setDateRange}
                 />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Historical Data</h3>
+                <div className="flex items-center space-x-2 mb-2">
+                  <Checkbox
+                    id="showHistoricalData"
+                    checked={showHistoricalData}
+                    onCheckedChange={(checked) =>
+                      setShowHistoricalData(checked as boolean)
+                    }
+                  />
+                  <label htmlFor="showHistoricalData">
+                    Show Historical Forecast
+                  </label>
+                </div>
+                {showHistoricalData && (
+                  <>
+                    <Select
+                      value={historicalDaysAhead}
+                      onValueChange={setHistoricalDaysAhead}
+                    >
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Days Ahead" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {["0", "1", "2", "3", "4", "5", "6", "7"].map((day) => (
+                          <SelectItem key={day} value={day}>
+                            {day} {day === "1" ? "Day" : "Days"} Ahead
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="time"
+                      value={historicalTime}
+                      onChange={(e) => setHistoricalTime(e.target.value)}
+                      className="mt-2"
+                    />
+                  </>
+                )}
               </div>
             </div>
             <Tabs defaultValue="graph">
