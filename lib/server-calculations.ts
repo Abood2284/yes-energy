@@ -12,9 +12,14 @@ function filterHistoricalData(
   const filterMinute = parseInt(timeComponents[1]);
 
   for (const forecast of forecasts) {
-    const forecastDate = new Date(forecast.datetime);
-    const forecastHour = forecastDate.getHours();
-    const forecastMinute = forecastDate.getMinutes();
+    const forecastDate = new Date(Date.UTC(
+      parseInt(forecast.date.substring(0, 4)),
+      parseInt(forecast.date.substring(4, 6)) - 1,
+      parseInt(forecast.date.substring(6, 8)),
+      parseInt(forecast.time)
+    ));
+    const forecastHour = forecastDate.getUTCHours();
+    const forecastMinute = forecastDate.getUTCMinutes();
 
     // Check if the forecast time is just before the specified time
     if (
@@ -23,12 +28,17 @@ function filterHistoricalData(
     ) {
       // Calculate the date for 'daysAhead' days before the forecast date
       const historicalDate = new Date(forecastDate);
-      historicalDate.setDate(historicalDate.getDate() - daysAhead);
+      historicalDate.setUTCDate(historicalDate.getUTCDate() - daysAhead);
 
       // Find the latest forecast made on or before the historical date
       const latestHistoricalForecast = forecasts.find(f => {
-        const fDate = new Date(f.datetime);
-        return fDate <= historicalDate && fDate.getDate() === historicalDate.getDate();
+        const fDate = new Date(Date.UTC(
+          parseInt(f.date.substring(0, 4)),
+          parseInt(f.date.substring(4, 6)) - 1,
+          parseInt(f.date.substring(6, 8)),
+          parseInt(f.time)
+        ));
+        return fDate <= historicalDate && fDate.getUTCDate() === historicalDate.getUTCDate();
       });
 
       if (latestHistoricalForecast) {
@@ -50,9 +60,7 @@ function filterHistoricalData(
   return filteredForecasts;
 }
 
-
-
-export async function calculateStatistics(chartData: ForecastData[]) {
+export async function calculateStatistics(chartData: ForecastData[], selectedForecasts: string[]) {
   console.log('Calculating statistics for', chartData.length, 'data points');
 
   const calculateRMSE = (actual: number[], predicted: number[]): number => {
@@ -73,17 +81,12 @@ export async function calculateStatistics(chartData: ForecastData[]) {
     };
   } = {};
 
-  const forecastKeys = [
-    "d_load_fcst",
-    "j_load_fcst",
-    "mm_load_fcst",
-    "mw_load_fcst"
-  ];
+  selectedForecasts.forEach((forecast) => {
+    if (forecast === 'load_act') return; // Skip load_act as it's the actual value
 
-  forecastKeys.forEach((forecast) => {
     console.log('Processing forecast:', forecast);
-    const actualValues = chartData.map((d) => parseFloat(d.load_act.toString()));
-    const predictedValues = chartData.map((d) => parseFloat(d[forecast as keyof ForecastData] as string));
+    const actualValues = chartData.map((d) => d.load_act);
+    const predictedValues = chartData.map((d) => d[forecast as keyof ForecastData] as number);
 
     // Calculate overall RMSE
     const overallRMSE = calculateRMSE(actualValues, predictedValues);
@@ -91,15 +94,14 @@ export async function calculateStatistics(chartData: ForecastData[]) {
     // Calculate daily RMSE
     const dailyRMSE: { [date: string]: number } = {};
     const groupedByDate = chartData.reduce((acc, curr) => {
-      const date = curr.datetime.split(' ')[0];
-      if (!acc[date]) acc[date] = [];
-      acc[date].push(curr);
+      if (!acc[curr.date]) acc[curr.date] = [];
+      acc[curr.date].push(curr);
       return acc;
     }, {} as { [date: string]: ForecastData[] });
 
     Object.entries(groupedByDate).forEach(([date, dayData]) => {
-      const dayActual = dayData.map((d) => parseFloat(d.load_act.toString()));
-      const dayPredicted = dayData.map((d) => parseFloat(d[forecast as keyof ForecastData] as string));
+      const dayActual = dayData.map((d) => d.load_act);
+      const dayPredicted = dayData.map((d) => d[forecast as keyof ForecastData] as number);
       dailyRMSE[date] = calculateRMSE(dayActual, dayPredicted);
     });
 
@@ -137,15 +139,25 @@ export async function processForecasts(
       to: dateRange.to.toISOString()
     });
     processedForecasts = processedForecasts.filter(forecast => {
-      const forecastDate = new Date(forecast.datetime.replace(' ', 'T'));
-      const isInRange = forecastDate >= dateRange.from && forecastDate <= dateRange.to;
-      console.log('Forecast date check:', {
-        forecastDate: forecastDate.toISOString(),
-        isInRange,
-        fromDate: dateRange.from.toISOString(),
-        toDate: dateRange.to.toISOString()
-      });
-      return isInRange;
+      console.log('Processing forecast:', { date: forecast.date, time: forecast.time });
+      try {
+        const year = parseInt(forecast.date.substring(0, 4));
+        const month = parseInt(forecast.date.substring(4, 6)) - 1; // JS months are 0-indexed
+        const day = parseInt(forecast.date.substring(6, 8));
+        const hour = parseInt(forecast.time);
+
+        console.log('Parsed components:', { year, month, day, hour });
+        
+        const forecastDate = new Date(Date.UTC(year, month, day, hour));
+        console.log('Created Date object:', forecastDate.toISOString());
+        
+        const isInRange = forecastDate >= dateRange.from && forecastDate <= dateRange.to;
+        console.log('Is in range:', isInRange);
+        return isInRange;
+      } catch (error) {
+        console.error('Error processing forecast:', { date: forecast.date, time: forecast.time }, error);
+        return false;
+      }
     });
     console.log('Forecasts after date filtering:', processedForecasts.length);
   } else {
@@ -154,7 +166,7 @@ export async function processForecasts(
 
   if (showHistoricalData && historicalDaysAhead !== undefined && historicalTime !== undefined) {
     console.log('Processing historical data');
-    // Implement historical data processing if needed
+    processedForecasts = filterHistoricalData(processedForecasts, historicalDaysAhead, historicalTime);
   }
 
   console.log('Final processed forecasts count:', processedForecasts.length);

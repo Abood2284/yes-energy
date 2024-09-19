@@ -37,6 +37,7 @@ import {
   SelectValue,
 } from "../ui/select";
 import { Input } from "../ui/input";
+import { format } from "date-fns";
 
 interface ForecastDashboardProps {
   initialForecasts: ForecastData[];
@@ -73,8 +74,28 @@ export default function ForecastDashboard({
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
     if (initialForecasts.length > 0) {
       return {
-        from: new Date(initialForecasts[0].datetime),
-        to: new Date(initialForecasts[initialForecasts.length - 1].datetime),
+        from: new Date(
+          Date.UTC(
+            parseInt(initialForecasts[0].date.substring(0, 4)),
+            parseInt(initialForecasts[0].date.substring(4, 6)) - 1,
+            parseInt(initialForecasts[0].date.substring(6, 8)),
+            parseInt(initialForecasts[0].time)
+          )
+        ),
+        to: new Date(
+          Date.UTC(
+            parseInt(
+              initialForecasts[initialForecasts.length - 1].date.substring(0, 4)
+            ),
+            parseInt(
+              initialForecasts[initialForecasts.length - 1].date.substring(4, 6)
+            ) - 1,
+            parseInt(
+              initialForecasts[initialForecasts.length - 1].date.substring(6, 8)
+            ),
+            parseInt(initialForecasts[initialForecasts.length - 1].time)
+          )
+        ),
       };
     }
     return undefined;
@@ -88,20 +109,54 @@ export default function ForecastDashboard({
   const [historicalTime, setHistoricalTime] = useState("13:00");
 
   const filteredData = useMemo(() => {
-    return chartData.filter((data) => {
-      const date = new Date(data.datetime);
-      return (
-        (!dateRange?.from || date >= dateRange.from) &&
-        (!dateRange?.to || date <= dateRange.to)
-      );
-    });
-  }, [chartData, dateRange]);
+    return chartData
+      .filter((data) => {
+        const date = new Date(
+          Date.UTC(
+            parseInt(data.date.substring(0, 4)),
+            parseInt(data.date.substring(4, 6)) - 1,
+            parseInt(data.date.substring(6, 8)),
+            parseInt(data.time)
+          )
+        );
+        return (
+          (!dateRange?.from || date >= dateRange.from) &&
+          (!dateRange?.to || date <= dateRange.to)
+        );
+      })
+      .map((data) => {
+        const filteredDataPoint: Partial<ForecastData> = {
+          date: data.date,
+          time: data.time,
+        };
+        selectedForecasts.forEach((forecast) => {
+          if (forecast in data) {
+            (filteredDataPoint as any)[forecast] =
+              data[forecast as keyof ForecastData];
+          }
+        });
+        return filteredDataPoint as ForecastData;
+      });
+  }, [chartData, dateRange, selectedForecasts]);
 
-  const chartWidth = useMemo(() => {
-    // Calculate a width based on the number of data points
-    // You can adjust the multiplier (20) to change the density of the chart
-    return Math.max(filteredData.length * 20, 1000); // Minimum width of 1000px
-  }, [filteredData]);
+  const calculateYAxisDomain = useMemo(() => {
+    let min = Infinity;
+    let max = -Infinity;
+
+    filteredData.forEach((data) => {
+      selectedForecasts.forEach((forecast) => {
+        const value = Number(data[forecast as keyof ForecastData]);
+        if (!isNaN(value)) {
+          min = Math.min(min, value);
+          max = Math.max(max, value);
+        }
+      });
+    });
+
+    // Add some padding to the min and max
+    const padding = (max - min) * 0.1;
+    return [Math.floor(min - padding), Math.ceil(max + padding)];
+  }, [filteredData, selectedForecasts]);
 
   const handleForecastToggle = (forecast: string) => {
     setSelectedForecasts((prev) =>
@@ -151,6 +206,12 @@ export default function ForecastDashboard({
     console.log("Initial statistics:", initialStatistics);
   }, [initialForecasts, initialStatistics]);
 
+  const chartWidth = useMemo(() => {
+    // Calculate a width based on the number of data points
+    // You can adjust the multiplier (20) to change the density of the chart
+    return Math.max(filteredData.length * 20, 1000); // Minimum width of 1000px
+  }, [filteredData]);
+
   const renderForecastLines = () => {
     return selectedForecasts.flatMap((forecast, index) => {
       const lines = [
@@ -158,7 +219,7 @@ export default function ForecastDashboard({
           key={forecast}
           type="monotone"
           dataKey={forecast}
-          stroke={colors[index]}
+          stroke={colors[index % colors.length]}
           name={forecast.replace("_", " ").toUpperCase()}
           dot={false}
         />,
@@ -170,7 +231,7 @@ export default function ForecastDashboard({
             key={`historical_${forecast}`}
             type="monotone"
             dataKey={`historical_${forecast}`}
-            stroke={colors[index + colors.length / 2]}
+            stroke={colors[(index + colors.length / 2) % colors.length]}
             name={`HISTORICAL ${forecast.replace("_", " ").toUpperCase()}`}
             strokeDasharray="5 5"
             dot={false}
@@ -181,10 +242,69 @@ export default function ForecastDashboard({
     });
   };
 
-  const formatTooltipValue = (value: any, name: string, props: any) => {
-    console.log("Tooltip value:", value, "name:", name, "props:", props);
+  const renderSpreadsheet = () => (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="sticky top-0 bg-white z-10">DateTime</TableHead>
+          {selectedForecasts.map((forecast) => (
+            <TableHead key={forecast} className="sticky top-0 bg-white z-10">
+              {forecast.replace("_", " ").toUpperCase()}
+            </TableHead>
+          ))}
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {filteredData.map((data, index) => (
+          <TableRow key={index} className="hover:bg-gray-100">
+            <TableCell className="font-medium">
+              {createDateFromForecast(data).toLocaleString()}
+            </TableCell>
+            {selectedForecasts.map((forecast) => (
+              <TableCell key={forecast}>
+                {formatCellValue(data[forecast as keyof ForecastData])}
+              </TableCell>
+            ))}
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+
+  const renderStatistics = () => (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Forecast</TableHead>
+          <TableHead>Overall RMSE</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {selectedForecasts.map(
+          (forecast) =>
+            statistics[forecast] && (
+              <TableRow key={forecast}>
+                <TableCell>
+                  {forecast.replace("_", " ").toUpperCase()}
+                </TableCell>
+                <TableCell>
+                  {statistics[forecast].overallRMSE.toFixed(2)}
+                </TableCell>
+              </TableRow>
+            )
+        )}
+      </TableBody>
+    </Table>
+  );
+
+  const formatCellValue = (value: any): string => {
     if (value === null || value === undefined) return "N/A";
     return typeof value === "number" ? value.toFixed(2) : String(value);
+  };
+
+  const formatTooltipValue = (value: any, name: string, props: any) => {
+    const formattedValue = formatCellValue(value);
+    return [formattedValue, name];
   };
 
   useEffect(() => {
@@ -205,6 +325,52 @@ export default function ForecastDashboard({
       </div>
     );
   }
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const [date, time] = label.split(" ");
+      const formattedDate = createDateFromForecast({
+        date,
+        time,
+      } as ForecastData);
+
+      return (
+        <div className="custom-tooltip bg-white p-3 border border-gray-300 rounded shadow">
+          <p className="label font-bold">{`${format(
+            formattedDate,
+            "MMM dd, yyyy HH:mm"
+          )}`}</p>
+          {payload.map((pld: any, index: number) => (
+            <p key={index} style={{ color: pld.color }}>
+              {`${pld.name}: ${pld.value}`}
+            </p>
+          ))}
+        </div>
+      );
+    }
+
+    return null;
+  };
+
+  // Utility function to create a Date object from ForecastData
+  function createDateFromForecast(forecast: ForecastData): Date {
+    const year = parseInt(forecast.date.substring(0, 4));
+    const month = parseInt(forecast.date.substring(4, 6)) - 1; // Correct: JS months are 0-indexed
+    const day = parseInt(forecast.date.substring(6, 8));
+
+    // Parse time correctly
+    const hour = Math.floor(parseInt(forecast.time) / 100);
+    const minute = parseInt(forecast.time) % 100;
+
+    return new Date(Date.UTC(year, month, day, hour, minute));
+  }
+
+  // In your ForecastDashboard component
+  const xAxisTickFormatter = (dateString: string) => {
+    const [date, time] = dateString.split(" ");
+    const parsedDate = createDateFromForecast({ date, time } as ForecastData);
+    return format(parsedDate, "MM/dd/yyyy"); // Or any format you prefer
+  };
 
   return (
     <div className="flex flex-col h-screen bg-gray-100">
@@ -297,25 +463,19 @@ export default function ForecastDashboard({
                       <LineChart data={filteredData}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis
-                          dataKey="datetime"
-                          tickFormatter={(tick) =>
-                            new Date(tick).toLocaleDateString()
-                          }
+                          dataKey={(v) => `${v.date} ${v.time}`}
+                          tickFormatter={xAxisTickFormatter}
                           interval="preserveStartEnd"
                         />
-                        <YAxis />
-                        <Tooltip
-                          labelFormatter={(label) =>
-                            new Date(label).toLocaleString()
-                          }
+                        <YAxis
+                          domain={calculateYAxisDomain}
+                          label={{
+                            value: "Load (MW)",
+                            angle: -90,
+                            position: "insideLeft",
+                          }}
                         />
-                        <Legend />
-                        <Tooltip
-                          formatter={formatTooltipValue}
-                          labelFormatter={(label) =>
-                            new Date(label).toLocaleString()
-                          }
-                        />
+                        <Tooltip content={<CustomTooltip />} />
                         <Legend />
                         {renderForecastLines()}
                       </LineChart>
@@ -326,69 +486,10 @@ export default function ForecastDashboard({
               </TabsContent>
               <TabsContent value="spreadsheet">
                 <ScrollArea className="h-[400px] w-full border rounded-md">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="sticky top-0 bg-white z-10">
-                          DateTime
-                        </TableHead>
-                        {selectedForecasts.map((forecast) => (
-                          <TableHead
-                            key={forecast}
-                            className="sticky top-0 bg-white z-10"
-                          >
-                            {forecast.replace("_", " ").toUpperCase()}
-                          </TableHead>
-                        ))}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredData.map((data, index) => (
-                        <TableRow key={index} className="hover:bg-gray-100">
-                          <TableCell className="font-medium">
-                            {new Date(data.datetime).toLocaleString()}
-                          </TableCell>
-                          {selectedForecasts.map((forecast) => (
-                            <TableCell key={forecast}>
-                              {(() => {
-                                const value =
-                                  data[forecast as keyof ForecastData];
-                                if (typeof value === "number") {
-                                  return value.toFixed(2);
-                                } else if (typeof value === "string") {
-                                  return value;
-                                } else {
-                                  return "N/A";
-                                }
-                              })()}
-                            </TableCell>
-                          ))}
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                  {renderSpreadsheet()}
                 </ScrollArea>
               </TabsContent>
-              <TabsContent value="statistics">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Forecast</TableHead>
-                      <TableHead>Overall RMSE</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {Object.entries(statistics).map(([forecast, stats]) => (
-                      <TableRow key={forecast}>
-                        <TableCell>
-                          {forecast.replace("_", " ").toUpperCase()}
-                        </TableCell>
-                        <TableCell>{stats.overallRMSE.toFixed(2)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TabsContent>
+              <TabsContent value="statistics">{renderStatistics()}</TabsContent>
             </Tabs>
           </CardContent>
         </Card>

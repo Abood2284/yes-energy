@@ -76,7 +76,6 @@ async function getForecastData(
     });
 
     const processedData: ForecastData[] = (actData as LoadAct[]).map((act) => {
-      const datetime = formatDateTime(act.date, act.time);
       const dFcst = (dFcstData as DLoadFcst[]).find(
         (d) => d.date === act.date && d.time === act.time
       );
@@ -91,7 +90,8 @@ async function getForecastData(
       );
 
       return {
-        datetime,
+        date: act.date,
+        time: act.time,
         load_act: parseFloat(act.load_act) || 0,
         d_load_fcst: dFcst ? parseFloat(dFcst.load_fcst) : null,
         j_load_fcst: jFcst ? parseFloat(jFcst.load_fcst) : null,
@@ -142,7 +142,15 @@ export default async function Page({
     );
 
     const processedForecasts = await processForecasts(forecastData);
-    const statistics = await calculateStatistics(processedForecasts);
+    
+    // Update this line
+    const statistics = await calculateStatistics(processedForecasts, [
+      "load_act",
+      "d_load_fcst",
+      "j_load_fcst",
+      "mm_load_fcst",
+      "mw_load_fcst",
+    ]);
 
     return (
       <>

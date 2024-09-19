@@ -1,5 +1,6 @@
 export interface ForecastData {
-  datetime: string;
+  date: string;  // Format: "YYYYMMDD"
+  time: string;  // Format: "H" or "HH"
   load_act: number;
   d_load_fcst: number | null;
   j_load_fcst: number | null;
