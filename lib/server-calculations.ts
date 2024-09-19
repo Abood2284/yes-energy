@@ -1,7 +1,7 @@
 import { ForecastData } from "@/lib/types";
 
 
-export function filterHistoricalData(
+function filterHistoricalData(
   forecasts: ForecastData[],
   daysAhead: number,
   time: string
@@ -53,13 +53,16 @@ export function filterHistoricalData(
 
 
 export async function calculateStatistics(chartData: ForecastData[]) {
+  console.log('Calculating statistics for', chartData.length, 'data points');
+
   const calculateRMSE = (actual: number[], predicted: number[]): number => {
     if (actual.length !== predicted.length) return NaN;
-    const squaredErrors = actual.map((value, index) =>
-      Math.pow(value - (predicted[index] || 0), 2)
-    );
-    const meanSquaredError =
-      squaredErrors.reduce((sum, value) => sum + value, 0) / actual.length;
+    const validPairs = actual.map((a, i) => [a, predicted[i]])
+                             .filter(([a, p]) => !isNaN(a) && !isNaN(p));
+    if (validPairs.length === 0) return NaN;
+    
+    const squaredErrors = validPairs.map(([a, p]) => Math.pow(a - p, 2));
+    const meanSquaredError = squaredErrors.reduce((sum, value) => sum + value, 0) / validPairs.length;
     return Math.sqrt(meanSquaredError);
   };
 
@@ -74,18 +77,13 @@ export async function calculateStatistics(chartData: ForecastData[]) {
     "d_load_fcst",
     "j_load_fcst",
     "mm_load_fcst",
-    "mw_load_fcst",
-    "historical_d_load_fcst",
-    "historical_j_load_fcst",
-    "historical_mm_load_fcst",
-    "historical_mw_load_fcst"
+    "mw_load_fcst"
   ];
 
   forecastKeys.forEach((forecast) => {
-    const actualValues = chartData.map((d) => d.load_act as number);
-    const predictedValues = chartData.map(
-      (d) => d[forecast as keyof ForecastData] as number
-    );
+    console.log('Processing forecast:', forecast);
+    const actualValues = chartData.map((d) => parseFloat(d.load_act.toString()));
+    const predictedValues = chartData.map((d) => parseFloat(d[forecast as keyof ForecastData] as string));
 
     // Calculate overall RMSE
     const overallRMSE = calculateRMSE(actualValues, predictedValues);
@@ -93,25 +91,25 @@ export async function calculateStatistics(chartData: ForecastData[]) {
     // Calculate daily RMSE
     const dailyRMSE: { [date: string]: number } = {};
     const groupedByDate = chartData.reduce((acc, curr) => {
-      const date = new Date(curr.datetime).toISOString().split('T')[0];
+      const date = curr.datetime.split(' ')[0];
       if (!acc[date]) acc[date] = [];
       acc[date].push(curr);
       return acc;
     }, {} as { [date: string]: ForecastData[] });
 
     Object.entries(groupedByDate).forEach(([date, dayData]) => {
-      const dayActual = dayData.map((d) => d.load_act as number);
-      const dayPredicted = dayData.map(
-        (d) => d[forecast as keyof ForecastData] as number
-      );
+      const dayActual = dayData.map((d) => parseFloat(d.load_act.toString()));
+      const dayPredicted = dayData.map((d) => parseFloat(d[forecast as keyof ForecastData] as string));
       dailyRMSE[date] = calculateRMSE(dayActual, dayPredicted);
     });
 
     stats[forecast] = { overallRMSE, dailyRMSE };
   });
 
+  console.log('Calculated statistics:', stats);
   return stats;
 }
+
 
 export async function processForecasts(
   forecasts: ForecastData[],
@@ -120,21 +118,45 @@ export async function processForecasts(
   historicalDaysAhead?: number,
   historicalTime?: string
 ): Promise<ForecastData[]> {
+  console.log('processForecasts input:', {
+    forecastCount: forecasts.length,
+    dateRange: dateRange ? {
+      from: dateRange.from?.toISOString(),
+      to: dateRange.to?.toISOString()
+    } : null,
+    showHistoricalData,
+    historicalDaysAhead,
+    historicalTime
+  });
+
   let processedForecasts = forecasts;
 
-  // Implement date range filtering if dateRange is provided
-  if (dateRange) {
-    const { from, to } = dateRange;
-    processedForecasts = processedForecasts.filter(forecast => {
-      const forecastDate = new Date(forecast.datetime);
-      return forecastDate >= from && forecastDate <= to;
+  if (dateRange && dateRange.from && dateRange.to) {
+    console.log('Filtering by date range:', {
+      from: dateRange.from.toISOString(),
+      to: dateRange.to.toISOString()
     });
+    processedForecasts = processedForecasts.filter(forecast => {
+      const forecastDate = new Date(forecast.datetime.replace(' ', 'T'));
+      const isInRange = forecastDate >= dateRange.from && forecastDate <= dateRange.to;
+      console.log('Forecast date check:', {
+        forecastDate: forecastDate.toISOString(),
+        isInRange,
+        fromDate: dateRange.from.toISOString(),
+        toDate: dateRange.to.toISOString()
+      });
+      return isInRange;
+    });
+    console.log('Forecasts after date filtering:', processedForecasts.length);
+  } else {
+    console.log('No date range provided for filtering');
   }
 
-  // Process historical data if requested
   if (showHistoricalData && historicalDaysAhead !== undefined && historicalTime !== undefined) {
-    processedForecasts = filterHistoricalData(processedForecasts, historicalDaysAhead, historicalTime);
+    console.log('Processing historical data');
+    // Implement historical data processing if needed
   }
 
+  console.log('Final processed forecasts count:', processedForecasts.length);
   return processedForecasts;
 }

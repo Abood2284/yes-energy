@@ -116,21 +116,16 @@ export default function ForecastDashboard({
     try {
       const response = await fetch("/api/process-forecasts", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          forecasts: initialForecasts,
           dateRange,
           showHistoricalData,
-          historicalDaysAhead,
+          historicalDaysAhead: parseInt(historicalDaysAhead),
           historicalTime,
           selectedForecasts,
         }),
       });
-      if (!response.ok) {
-        throw new Error("Failed to fetch processed data");
-      }
+      if (!response.ok) throw new Error("Failed to fetch processed data");
       const data: ProcessedData = await response.json();
       setChartData(data.processedForecasts);
       setStatistics(data.statistics);
@@ -140,13 +135,57 @@ export default function ForecastDashboard({
       setIsLoading(false);
     }
   }, [
-    initialForecasts,
     dateRange,
     showHistoricalData,
     historicalDaysAhead,
     historicalTime,
     selectedForecasts,
   ]);
+
+  useEffect(() => {
+    updateChartData();
+  }, [updateChartData]);
+
+  useEffect(() => {
+    console.log("Initial forecasts:", initialForecasts);
+    console.log("Initial statistics:", initialStatistics);
+  }, [initialForecasts, initialStatistics]);
+
+  const renderForecastLines = () => {
+    return selectedForecasts.flatMap((forecast, index) => {
+      const lines = [
+        <Line
+          key={forecast}
+          type="monotone"
+          dataKey={forecast}
+          stroke={colors[index]}
+          name={forecast.replace("_", " ").toUpperCase()}
+          dot={false}
+        />,
+      ];
+
+      if (showHistoricalData && forecast !== "load_act") {
+        lines.push(
+          <Line
+            key={`historical_${forecast}`}
+            type="monotone"
+            dataKey={`historical_${forecast}`}
+            stroke={colors[index + colors.length / 2]}
+            name={`HISTORICAL ${forecast.replace("_", " ").toUpperCase()}`}
+            strokeDasharray="5 5"
+            dot={false}
+          />
+        );
+      }
+      return lines;
+    });
+  };
+
+  const formatTooltipValue = (value: any, name: string, props: any) => {
+    console.log("Tooltip value:", value, "name:", name, "props:", props);
+    if (value === null || value === undefined) return "N/A";
+    return typeof value === "number" ? value.toFixed(2) : String(value);
+  };
 
   useEffect(() => {
     updateChartData();
@@ -271,16 +310,14 @@ export default function ForecastDashboard({
                           }
                         />
                         <Legend />
-                        {selectedForecasts.map((forecast, index) => (
-                          <Line
-                            key={forecast}
-                            type="monotone"
-                            dataKey={forecast}
-                            stroke={colors[index % colors.length]}
-                            activeDot={{ r: 8 }}
-                            name={forecast.replace("_", " ").toUpperCase()}
-                          />
-                        ))}
+                        <Tooltip
+                          formatter={formatTooltipValue}
+                          labelFormatter={(label) =>
+                            new Date(label).toLocaleString()
+                          }
+                        />
+                        <Legend />
+                        {renderForecastLines()}
                       </LineChart>
                     </ResponsiveContainer>
                   </div>

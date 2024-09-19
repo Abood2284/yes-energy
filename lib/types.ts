@@ -10,3 +10,12 @@ export interface ForecastData {
   historical_mm_load_fcst?: number | null;
   historical_mw_load_fcst?: number | null;
 }
+export interface ProcessedData {
+  processedForecasts: ForecastData[];
+  statistics: {
+    [key: string]: {
+      overallRMSE: number;
+      dailyRMSE: { [date: string]: number };
+    };
+  };
+}
