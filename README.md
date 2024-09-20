@@ -1,106 +1,172 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`c3`](https://developers.cloudflare.com/pages/get-started/c3).
+# Yes Energy Forecast Dashboard
+
+## Table of Contents
+
+1. [Project Overview](#project-overview)
+2. [Tech Stack](#tech-stack)
+3. [Prerequisites](#prerequisites)
+4. [Getting Started](#getting-started)
+   - [Clone the Repository](#clone-the-repository)
+   - [Environment Setup](#environment-setup)
+   - [Install Dependencies](#install-dependencies)
+   - [Database Setup](#database-setup)
+   - [Running the Application](#running-the-application)
+5. [Project Structure](#project-structure)
+6. [Key Features](#key-features)
+7. [Deployment](#deployment)
+8. [Troubleshooting](#troubleshooting)
+9. [Contributing](#contributing)
+10. [License](#license)
+
+## Project Overview
+
+Yes Energy Forecast Dashboard is a web application designed to visualize and analyze energy market data, including load forecasts and actual load data. It provides interactive visualizations, statistical analysis, and data comparison features for various types of energy forecasts.
+
+## Tech Stack
+
+- **Frontend**: Next.js 14 (App Router), React, TypeScript
+- **Styling**: Tailwind CSS, Shadcn UI
+- **Backend**: Next.js API Routes (Edge Runtime)
+- **Database**: Cloudflare D1 (SQLite)
+- **ORM**: Drizzle ORM
+- **Deployment**: Cloudflare Pages
+
+## Prerequisites
+
+Before you begin, ensure you have the following installed and set up:
+
+- Node.js (v18 or later)
+- npm (v7 or later)
+- Git
+- A Cloudflare account
+- Wrangler CLI (for Cloudflare Workers and D1)
 
 ## Getting Started
 
-First, run the development server:
+### Clone the Repository
+
+git clone https://github.com/your-username/yes-energy-forecast-dashboard.git
+
+cd yes-energy-forecast-dashboard
+
+### Environment Setup
+
+1. Create a `.env.local` file in the root directory:
+
+```
+CLOUDFLARE_ACCOUNT_ID=your_account_id
+CLOUDFLARE_API_TOKEN=your_api_token
+```
+
+2. Set up Cloudflare D1:
+
+   - Log in to your Cloudflare account
+   - Navigate to Workers & Pages > D1
+   - Create a new database named `yes_energy_db`
+   - Note the database ID
+
+3. Update the `wrangler.toml` file with your database ID:
+
+```toml
+[[d1_databases]]
+binding = "DB"
+database_name = "yes_energy_db"
+database_id = "your_database_id"
+```
+
+### Install Dependencies
+
+```bash
+npm install
+```
+
+### Database Setup
+
+1. Initialize the local D1 database:
+
+```bash
+wrangler d1 create yes_energy_db
+```
+
+2. Apply the database schema:
+
+```bash
+npm run migrate
+```
+
+3. Seed the database with sample data (if available):
+
+```bash
+npm run seed
+```
+
+### Running the Application
+
+1. Start the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Open your browser and navigate to `http://localhost:3000`
 
-## Cloudflare integration
+## Project Structure
 
-Besides the `dev` script mentioned above `c3` has added a few extra scripts that allow you to integrate the application with the [Cloudflare Pages](https://pages.cloudflare.com/) environment, these are:
+```
+yes-energy-forecast-dashboard/
+├── app/
+│   ├── api/
+│   ├── components/
+│   ├── layout.tsx
+│   └── page.tsx
+├── db/
+│   ├── index.ts
+│   └── schema.ts
+├── lib/
+│   ├── types.ts
+│   └── utils.ts
+├── public/
+├── .env.local
+├── next.config.mjs
+├── package.json
+├── README.md
+├── tailwind.config.ts
+└── wrangler.toml
+```
 
-- `pages:build` to build the application for Pages using the [`@cloudflare/next-on-pages`](https://github.com/cloudflare/next-on-pages) CLI
-- `preview` to locally preview your Pages application using the [Wrangler](https://developers.cloudflare.com/workers/wrangler/) CLI
-- `deploy` to deploy your Pages application using the [Wrangler](https://developers.cloudflare.com/workers/wrangler/) CLI
+## Key Features
 
-> **Note:** while the `dev` script is optimal for local development you should preview your Pages application as well (periodically or before deployments) in order to make sure that it can properly work in the Pages environment (for more details see the [`@cloudflare/next-on-pages` recommended workflow](https://github.com/cloudflare/next-on-pages/blob/main/internal-packages/next-dev/README.md#recommended-development-workflow))
+1. Interactive forecast visualization
+2. Date range selection
+3. Multiple forecast type comparison
+4. Statistical analysis (RMSE, MAPE)
+5. Data table view with sorting and filtering
+6. Historical forecast comparison
 
-### Bindings
+## Deployment
 
-Cloudflare [Bindings](https://developers.cloudflare.com/pages/functions/bindings/) are what allows you to interact with resources available in the Cloudflare Platform.
+To deploy the application to Cloudflare Pages:
 
-You can use bindings during development, when previewing locally your application and of course in the deployed application:
+1. Ensure you have the Cloudflare Pages GitHub integration set up.
+2. Push your changes to the connected GitHub repository.
+3. Cloudflare Pages will automatically build and deploy your application.
 
-- To use bindings in dev mode you need to define them in the `next.config.js` file under `setupDevBindings`, this mode uses the `next-dev` `@cloudflare/next-on-pages` submodule. For more details see its [documentation](https://github.com/cloudflare/next-on-pages/blob/05b6256/internal-packages/next-dev/README.md).
+For manual deployment:
 
-- To use bindings in the preview mode you need to add them to the `pages:preview` script accordingly to the `wrangler pages dev` command. For more details see its [documentation](https://developers.cloudflare.com/workers/wrangler/commands/#dev-1) or the [Pages Bindings documentation](https://developers.cloudflare.com/pages/functions/bindings/).
+```bash
+npm run build
+npm run deploy
+```
 
-- To use bindings in the deployed application you will need to configure them in the Cloudflare [dashboard](https://dash.cloudflare.com/). For more details see the [Pages Bindings documentation](https://developers.cloudflare.com/pages/functions/bindings/).
+## Troubleshooting
 
-#### KV Example
+- If you encounter issues with D1 database connections, ensure your Cloudflare API token has the necessary permissions.
+- For local development database issues, try running `wrangler d1 migrations apply yes_energy_db` to ensure all migrations are up to date.
 
-`c3` has added for you an example showing how you can use a KV binding.
+## Contributing
 
-In order to enable the example:
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-- Search for javascript/typescript lines containing the following comment:
-  ```ts
-  // KV Example:
-  ```
-  and uncomment the commented lines below it.
-- Do the same in the `wrangler.toml` file, where
-  the comment is:
-  ```
-  # KV Example:
-  ```
-- If you're using TypeScript run the `cf-typegen` script to update the `env.d.ts` file:
-  ```bash
-  npm run cf-typegen
-  # or
-  yarn cf-typegen
-  # or
-  pnpm cf-typegen
-  # or
-  bun cf-typegen
-  ```
+## License
 
-After doing this you can run the `dev` or `preview` script and visit the `/api/hello` route to see the example in action.
-
-Finally, if you also want to see the example work in the deployed application make sure to add a `MY_KV_NAMESPACE` binding to your Pages application in its [dashboard kv bindings settings section](https://dash.cloudflare.com/?to=/:account/pages/view/:pages-project/settings/functions#kv_namespace_bindings_section). After having configured it make sure to re-deploy your application.
-
----
-
-You're absolutely right. In a production environment, it's more common and efficient for clients to have their forecast data in a database rather than static CSV files. This approach allows for easier updates, better data management, and more efficient querying. Let's restructure your project to accommodate this future scenario while maintaining flexibility.
-Here's a proposed structure that would make it easier to integrate with a client's database in the future:
-
-Create an API Layer:
-Instead of directly processing CSV files, create an API that abstracts the data source. This API could initially work with your CSV files but can be easily modified to connect to a database in the future.
-Use a Data Access Layer:
-Implement a data access layer that separates the logic of data retrieval from the rest of your application. This layer can be swapped out or modified when transitioning from CSV to a database.
-Implement a Webhook System:
-Instead of uploading files, set up a webhook system that allows the client's system to push new or updated forecast data to your application.
-
-Here's how we can modify your Cloudflare Worker to implement this structure:
-Cloudflare Worker with Flexible Data SourceClick to open code
-This new structure provides several advantages:
-
-Abstraction: The ForecastDataAccess class abstracts the data source. Currently, it works with CSV files in R2, but it can be easily modified to work with a database in the future.
-API Endpoints: Instead of directly processing files, we now have API endpoints that clients can use to fetch forecast data.
-Webhook: We've added a webhook endpoint that allows for pushing forecast updates. This can be used by the client's system to automatically update the forecast data without manual CSV uploads.
-Flexibility: This structure allows for easy transition from CSV files to a database. When the client is ready to switch to a database, you'll only need to modify the ForecastDataAccess class to connect to and query the new data source.
-
-To use this new structure:
-
-Update your src/index.ts file with this new code.
-Deploy your updated Worker:
-Copynpx wrangler deploy
-
-Update your frontend application to use the new API endpoints for fetching forecast data.
-When the client is ready to transition to a database:
-
-Modify the getForecastData method in ForecastDataAccess to query the client's database instead of reading from CSV.
-Update the storeForecastData method to insert data into the client's database.
-Implement authentication and authorization for the webhook to ensure secure data updates.
-
-This structure provides a clear path for future integration with a client's database while allowing you to continue working with CSV files in the short term. It also provides a standardized way for the client's system to push updates to your application, making the transition smoother when the time comes.
+This project is licensed under the MIT License.
