@@ -26,7 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ForecastData } from "@/lib/types";
+import { ForecastData, ProcessedData } from "@/lib/types";
 import { Loader2 } from "lucide-react";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import {
@@ -44,17 +44,9 @@ interface ForecastDashboardProps {
   initialStatistics: {
     [key: string]: {
       overallRMSE: number;
+      overallMAPE: number;
       dailyRMSE: { [date: string]: number };
-    };
-  };
-}
-
-interface ProcessedData {
-  processedForecasts: ForecastData[];
-  statistics: {
-    [key: string]: {
-      overallRMSE: number;
-      dailyRMSE: { [date: string]: number };
+      dailyMAPE: { [date: string]: number };
     };
   };
 }
@@ -63,7 +55,30 @@ export default function ForecastDashboard({
   initialForecasts = [],
   initialStatistics = {},
 }: ForecastDashboardProps) {
-  const colors = ["#8884d8", "#82ca9d", "#ffc658", "#ff7300", "#0088FE"];
+  const [baselineChartData, setBaselineChartData] = useState(initialForecasts);
+  const [historicalChartData, setHistoricalChartData] = useState<
+    ForecastData[]
+  >([]);
+
+  const colors = {
+    load_act: "#8884d8",
+    d_load_fcst: "#82ca9d",
+    j_load_fcst: "#ffc658",
+    mm_load_fcst: "#ff7300",
+    mw_load_fcst: "#0088FE",
+  };
+
+  const getHistoricalColor = (baseColor: string) => {
+    // Function to create a lighter shade of the base color
+    const lightenColor = (color: string, amount: number) => {
+      return color.replace(/^#/, "").replace(/.{2}/g, (c: string) => {
+        const num = Math.min(255, Math.max(0, parseInt(c, 16) + amount));
+        return num.toString(16).padStart(2, "0");
+      });
+    };
+    return `#${lightenColor(baseColor, 40)}`;
+  };
+
   const [selectedForecasts, setSelectedForecasts] = useState<string[]>([
     "load_act",
     "d_load_fcst",
@@ -182,10 +197,30 @@ export default function ForecastDashboard({
       });
       if (!response.ok) throw new Error("Failed to fetch processed data");
       const data: ProcessedData = await response.json();
-      setChartData(data.processedForecasts);
+      console.log("API Response:", data);
+
+      setBaselineChartData(data.processedForecasts || []);
+      setHistoricalChartData(data.processedForecasts || []);
       setStatistics(data.statistics);
+
+      setChartData(data.processedForecasts);
+
+      console.log("Baseline Chart Data:", data.processedForecasts);
+      console.log("Historical Chart Data:", data.processedForecasts);
+
+      // Log a few sample entries to verify the date and time
+      const sampleEntries = data.processedForecasts.slice(0, 5);
+      sampleEntries.forEach((entry, index) => {
+        if (entry.load_act) return;
+        console.log(`Sample Historical Entry ${index + 1}:`, {
+          date: entry.date,
+          time: entry.time,
+        });
+      });
     } catch (error) {
       console.error("Error updating chart data:", error);
+      setBaselineChartData([]);
+      setHistoricalChartData([]);
     } finally {
       setIsLoading(false);
     }
@@ -196,6 +231,15 @@ export default function ForecastDashboard({
     historicalTime,
     selectedForecasts,
   ]);
+
+  const combinedChartData = useMemo(() => {
+    return baselineChartData.map((baseline) => {
+      const historical = historicalChartData.find(
+        (h) => h.date === baseline.date && h.time === baseline.time
+      );
+      return { ...baseline, ...historical };
+    });
+  }, [baselineChartData, historicalChartData]);
 
   useEffect(() => {
     updateChartData();
@@ -213,25 +257,27 @@ export default function ForecastDashboard({
   }, [filteredData]);
 
   const renderForecastLines = () => {
-    return selectedForecasts.flatMap((forecast, index) => {
+    return selectedForecasts.flatMap((forecast) => {
+      const baseColor = colors[forecast as keyof typeof colors];
       const lines = [
         <Line
           key={forecast}
           type="monotone"
           dataKey={forecast}
-          stroke={colors[index % colors.length]}
+          stroke={baseColor}
           name={forecast.replace("_", " ").toUpperCase()}
           dot={false}
         />,
       ];
 
       if (showHistoricalData && forecast !== "load_act") {
+        const historicalKey = `historical_${forecast}`;
         lines.push(
           <Line
-            key={`historical_${forecast}`}
+            key={historicalKey}
             type="monotone"
-            dataKey={`historical_${forecast}`}
-            stroke={colors[(index + colors.length / 2) % colors.length]}
+            dataKey={historicalKey}
+            stroke={getHistoricalColor(baseColor)}
             name={`HISTORICAL ${forecast.replace("_", " ").toUpperCase()}`}
             strokeDasharray="5 5"
             dot={false}
@@ -277,6 +323,7 @@ export default function ForecastDashboard({
         <TableRow>
           <TableHead>Forecast</TableHead>
           <TableHead>Overall RMSE</TableHead>
+          <TableHead>Overall MAPE</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -289,6 +336,9 @@ export default function ForecastDashboard({
                 </TableCell>
                 <TableCell>
                   {statistics[forecast].overallRMSE.toFixed(2)}
+                </TableCell>
+                <TableCell>
+                  {statistics[forecast].overallMAPE.toFixed(2)}%
                 </TableCell>
               </TableRow>
             )
@@ -460,7 +510,7 @@ export default function ForecastDashboard({
                 <ScrollArea className="w-full">
                   <div style={{ width: `${chartWidth}px`, height: "400px" }}>
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={filteredData}>
+                      <LineChart data={chartData}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis
                           dataKey={(v) => `${v.date} ${v.time}`}

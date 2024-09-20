@@ -10,7 +10,7 @@ export const d_load_fcst = sqliteTable("d_load_fcst", {
   date: text("date").notNull(), 
   time: text("time").notNull(), 
   load_fcst: text("load_fcst").notNull(),
-  revision: text("revision") 
+  revision: text("revision").notNull() 
 });
 
 export const j_load_fcst = sqliteTable("j_load_fcst", {
@@ -18,7 +18,7 @@ export const j_load_fcst = sqliteTable("j_load_fcst", {
   date: text("date").notNull(), 
   time: text("time").notNull(), 
   load_fcst: text("load_fcst").notNull(),
-  revision: text("revision") 
+  revision: text("revision").notNull() 
 });
 
 export const mm_load_fcst = sqliteTable("mm_load_fcst", {
@@ -26,7 +26,7 @@ export const mm_load_fcst = sqliteTable("mm_load_fcst", {
   date: text("date").notNull(), 
   time: text("time").notNull(), 
   load_fcst: text("load_fcst").notNull(),
-  revision: text("revision") 
+  revision: text("revision").notNull() 
 });
 
 export const mw_load_fcst = sqliteTable("mw_load_fcst", {
@@ -34,7 +34,7 @@ export const mw_load_fcst = sqliteTable("mw_load_fcst", {
   date: text("date").notNull(), 
   time: text("time").notNull(), 
   load_fcst: text("load_fcst").notNull(),
-  revision: text("revision") 
+  revision: text("revision").notNull() 
 });
 
 export const load_act = sqliteTable("load_act", {
@@ -49,7 +49,7 @@ export const d_load_fcst_full = sqliteTable("d_load_fcst_full", {
   date: text("date").notNull(), 
   time: text("time").notNull(), 
   load_fcst: text("load_fcst").notNull(),
-  revision: text("revision") 
+  revision: text("revision").notNull()
 });
 
 export const j_load_fcst_full = sqliteTable("j_load_fcst_full", {
@@ -57,7 +57,7 @@ export const j_load_fcst_full = sqliteTable("j_load_fcst_full", {
   date: text("date").notNull(), 
   time: text("time").notNull(), 
   load_fcst: text("load_fcst").notNull(),
-  revision: text("revision") 
+  revision: text("revision").notNull()
 });
 
 export const mm_load_fcst_full = sqliteTable("mm_load_fcst_full", {
@@ -65,7 +65,7 @@ export const mm_load_fcst_full = sqliteTable("mm_load_fcst_full", {
   date: text("date").notNull(), 
   time: text("time").notNull(), 
   load_fcst: text("load_fcst").notNull(),
-  revision: text("revision") 
+  revision: text("revision").notNull() 
 });
 
 export const mw_load_fcst_full = sqliteTable("mw_load_fcst_full", {
@@ -73,7 +73,7 @@ export const mw_load_fcst_full = sqliteTable("mw_load_fcst_full", {
   date: text("date").notNull(), 
   time: text("time").notNull(), 
   load_fcst: text("load_fcst").notNull(),
-  revision: text("revision") 
+  revision: text("revision").notNull() 
 });
 
 export const load_act_full = sqliteTable("load_act_full", {

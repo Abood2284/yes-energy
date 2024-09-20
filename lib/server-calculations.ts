@@ -74,41 +74,55 @@ export async function calculateStatistics(chartData: ForecastData[], selectedFor
     return Math.sqrt(meanSquaredError);
   };
 
+   const calculateMAPE = (actual: number[], predicted: number[]): number => {
+    const validPairs = actual.map((a, i) => [a, predicted[i]])
+                             .filter(([a, p]) => !isNaN(a) && !isNaN(p) && a !== 0);
+    if (validPairs.length === 0) return NaN;
+    
+    const sumPercentageErrors = validPairs.reduce((sum, [a, p]) => sum + Math.abs((a - p) / a), 0);
+      return (sumPercentageErrors / validPairs.length) * 100;
+    };
+
+
   const stats: {
     [key: string]: {
       overallRMSE: number;
+      overallMAPE: number;
       dailyRMSE: { [date: string]: number };
+      dailyMAPE: { [date: string]: number };
     };
   } = {};
 
-  selectedForecasts.forEach((forecast) => {
-    if (forecast === 'load_act') return; // Skip load_act as it's the actual value
 
-    console.log('Processing forecast:', forecast);
+   selectedForecasts.forEach((forecast) => {
     const actualValues = chartData.map((d) => d.load_act);
     const predictedValues = chartData.map((d) => d[forecast as keyof ForecastData] as number);
 
-    // Calculate overall RMSE
+    // Calculate overall RMSE and MAPE
     const overallRMSE = calculateRMSE(actualValues, predictedValues);
+    const overallMAPE = calculateMAPE(actualValues, predictedValues);
 
-    // Calculate daily RMSE
+    // Calculate daily RMSE and MAPE
     const dailyRMSE: { [date: string]: number } = {};
+    const dailyMAPE: { [date: string]: number } = {};
     const groupedByDate = chartData.reduce((acc, curr) => {
       if (!acc[curr.date]) acc[curr.date] = [];
       acc[curr.date].push(curr);
       return acc;
     }, {} as { [date: string]: ForecastData[] });
 
-    Object.entries(groupedByDate).forEach(([date, dayData]) => {
+
+   
+     Object.entries(groupedByDate).forEach(([date, dayData]) => {
       const dayActual = dayData.map((d) => d.load_act);
       const dayPredicted = dayData.map((d) => d[forecast as keyof ForecastData] as number);
       dailyRMSE[date] = calculateRMSE(dayActual, dayPredicted);
+      dailyMAPE[date] = calculateMAPE(dayActual, dayPredicted);
     });
 
-    stats[forecast] = { overallRMSE, dailyRMSE };
+   stats[forecast] = { overallRMSE, overallMAPE, dailyRMSE, dailyMAPE };
   });
 
-  console.log('Calculated statistics:', stats);
   return stats;
 }
 
@@ -132,6 +146,7 @@ export async function processForecasts(
   });
 
   let processedForecasts = forecasts;
+  
 
   if (dateRange && dateRange.from && dateRange.to) {
     console.log('Filtering by date range:', {
@@ -139,20 +154,18 @@ export async function processForecasts(
       to: dateRange.to.toISOString()
     });
     processedForecasts = processedForecasts.filter(forecast => {
-      console.log('Processing forecast:', { date: forecast.date, time: forecast.time });
       try {
-        const year = parseInt(forecast.date.substring(0, 4));
-        const month = parseInt(forecast.date.substring(4, 6)) - 1; // JS months are 0-indexed
-        const day = parseInt(forecast.date.substring(6, 8));
-        const hour = parseInt(forecast.time);
 
-        console.log('Parsed components:', { year, month, day, hour });
-        
+        const dateString = typeof forecast.date === 'number' ? forecast.date as String : forecast.date;
+        const year = parseInt(dateString.substring(0, 4));
+        const month = parseInt(dateString.substring(4, 6)) - 1; // JS months are 0-indexed
+        const day = parseInt(dateString.substring(6, 8));
+
+        const hour = typeof forecast.time === 'number' ? forecast.time : parseInt(forecast.time);
+      
         const forecastDate = new Date(Date.UTC(year, month, day, hour));
-        console.log('Created Date object:', forecastDate.toISOString());
         
         const isInRange = forecastDate >= dateRange.from && forecastDate <= dateRange.to;
-        console.log('Is in range:', isInRange);
         return isInRange;
       } catch (error) {
         console.error('Error processing forecast:', { date: forecast.date, time: forecast.time }, error);
@@ -166,9 +179,21 @@ export async function processForecasts(
 
   if (showHistoricalData && historicalDaysAhead !== undefined && historicalTime !== undefined) {
     console.log('Processing historical data');
-    processedForecasts = filterHistoricalData(processedForecasts, historicalDaysAhead, historicalTime);
+    // Filter out `load_act` from historical processings
+    const historicalForecasts = processedForecasts.filter(forecast => forecast.toString() !== 'load_act');
+    processedForecasts = filterHistoricalData(historicalForecasts, historicalDaysAhead, historicalTime);
   }
 
   console.log('Final processed forecasts count:', processedForecasts.length);
-  return processedForecasts;
+  return processedForecasts.map(forecast => ({
+    ...forecast,
+    d_load_fcst: forecast.d_load_fcst,
+    j_load_fcst: forecast.j_load_fcst,
+    mm_load_fcst: forecast.mm_load_fcst,
+    mw_load_fcst: forecast.mw_load_fcst,
+    historical_d_load_fcst: forecast.historical_d_load_fcst,
+    historical_j_load_fcst: forecast.historical_j_load_fcst,
+    historical_mm_load_fcst: forecast.historical_mm_load_fcst,
+    historical_mw_load_fcst: forecast.historical_mw_load_fcst,
+  }));
 }
